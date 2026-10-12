@@ -1,0 +1,1923 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>高校化学 反応系統図ドラッグ＆ドロップクイズ</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Font Awesome CDN -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    .bg-grid {
+      background-size: 24px 24px;
+      background-image: 
+        radial-gradient(circle, #cbd5e1 1.2px, transparent 1.2px);
+    }
+    .card-shadow {
+      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.08), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
+    }
+    .chem-svg {
+      display: inline-block;
+      vertical-align: middle;
+      overflow: visible;
+    }
+    ::-webkit-scrollbar {
+      height: 6px;
+      width: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #f1f5f9;
+      border-radius: 9999px;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #cbd5e1;
+      border-radius: 9999px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #94a3b8;
+    }
+
+    /* タッチドラッグ時の浮遊ゴースト */
+    .touch-dragging-ghost {
+      position: fixed;
+      pointer-events: none;
+      z-index: 9999;
+      transform: translate(-50%, -50%) scale(1.05);
+      opacity: 0.92;
+      box-shadow: 0 12px 24px -4px rgba(0, 0, 0, 0.25);
+      transition: none !important;
+    }
+
+    /* 選択中のターゲット枠点滅アニメーション */
+    @keyframes slotPulse {
+      0%, 100% {
+        border-color: #6366f1;
+        box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.2);
+        background-color: rgba(238, 242, 255, 0.85);
+      }
+      50% {
+        border-color: #4338ca;
+        box-shadow: 0 0 0 5px rgba(99, 102, 241, 0.35);
+        background-color: rgba(224, 231, 255, 0.95);
+      }
+    }
+    .slot-awaiting-target {
+      animation: slotPulse 1.2s infinite ease-in-out;
+      cursor: pointer !important;
+    }
+    
+    /* 選択中カードの強調スタイル */
+    .card-selected-active {
+      transform: translateY(-4px) scale(1.04);
+      border-color: #4f46e5 !important;
+      box-shadow: 0 0 0 3px #818cf8, 0 10px 15px -3px rgba(0, 0, 0, 0.1) !important;
+      background-color: #eef2ff !important;
+    }
+  </style>
+</head>
+<body class="bg-slate-100 text-slate-800 flex flex-col h-screen overflow-hidden select-none font-sans">
+
+  <!-- 上部ヘッダー & ナビゲーションバー -->
+  <header class="bg-white border-b border-slate-200 px-4 py-2 shrink-0 z-40 shadow-xs flex flex-wrap items-center justify-between gap-2">
+    <div class="flex items-center gap-2.5">
+      <div class="w-8 h-8 rounded-lg bg-indigo-600 text-white flex items-center justify-center font-bold text-base shadow-sm">
+        <i class="fa-solid fa-flask-vial"></i>
+      </div>
+      <div>
+        <h1 class="text-sm md:text-base font-extrabold text-slate-900 leading-tight">有機化学 反応系統図クイズ</h1>
+        <p class="text-[10px] text-slate-500 font-medium">スマホ：下から選んでタップ配置 / PC：ドラッグ＆ドロップ</p>
+      </div>
+    </div>
+
+    <!-- モード選択 & コントロール -->
+    <div class="flex items-center gap-2 flex-wrap">
+      <!-- 系統図テーマ選択 -->
+      <div class="relative">
+        <select id="diagramSelect" class="bg-slate-50 border border-slate-300 text-slate-800 text-xs font-semibold rounded-lg pl-3 pr-8 py-1.5 appearance-none focus:outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer shadow-2xs">
+          <option value="ethylene">【Lv.1 基礎】エチレンの反応 (脂肪族)</option>
+          <option value="acetylene">【Lv.1 基礎】アセチレンの反応 (脂肪族)</option>
+          <option value="ethanol">【Lv.2 標準】エタノールの反応 (脱水・酸化)</option>
+          <option value="benzene">【Lv.2 標準】ベンゼンの反応 (置換・付加)</option>
+          <option value="salicylic">【Lv.3 応用】サリチル酸の合成と誘導体</option>
+          <option value="cumene">【Lv.3 応用】クメン法＆フェノール製法</option>
+          <option value="aniline">【Lv.3 応用】窒素を含む芳香族 (アニリン・ジアゾ)</option>
+          <option value="exam_aromatic">【Lv.4 総合演習】芳香族化合物の相互関係 (全11問)</option>
+        </select>
+        <i class="fa-solid fa-chevron-down absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none text-xs"></i>
+      </div>
+
+      <!-- クイズ種別選択（構造式当て / 反応条件当て） -->
+      <div class="inline-flex rounded-lg border border-slate-300 bg-slate-100 p-0.5">
+        <button id="typeStructureBtn" class="px-2.5 py-1 text-xs font-bold rounded-md transition-all shadow-xs bg-white text-indigo-700">
+          <i class="fa-solid fa-shapes mr-1"></i>構造式当て
+        </button>
+        <button id="typeReagentBtn" class="px-2.5 py-1 text-xs font-bold rounded-md transition-all text-slate-600 hover:text-slate-900">
+          <i class="fa-solid fa-bolt mr-1"></i>条件・試薬当て
+        </button>
+      </div>
+
+      <!-- 進捗バッジ -->
+      <div class="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 shadow-2xs">
+        <span class="text-[10px] font-bold text-slate-500">進捗</span>
+        <span id="scoreText" class="text-xs font-black text-indigo-600">0 / 0</span>
+        <div class="w-14 h-2 bg-slate-200 rounded-full overflow-hidden">
+          <div id="progressBar" class="h-full bg-emerald-500 transition-all duration-300 w-0"></div>
+        </div>
+      </div>
+
+      <!-- 操作ボタン -->
+      <button id="resetBtn" class="px-2.5 py-1.5 rounded-lg border border-slate-300 hover:bg-slate-50 text-slate-700 text-xs font-bold transition flex items-center gap-1 active:scale-95">
+        <i class="fa-solid fa-rotate-right text-slate-500"></i> リセット
+      </button>
+      <button id="showAnswerBtn" class="px-2.5 py-1.5 rounded-lg border border-amber-300 bg-amber-50 hover:bg-amber-100 text-amber-800 text-xs font-bold transition flex items-center gap-1 active:scale-95">
+        <i class="fa-solid fa-eye text-amber-600"></i> 解答
+      </button>
+      <button id="helpBtn" class="w-7 h-7 rounded-lg border border-slate-300 hover:bg-slate-50 text-slate-600 text-xs flex items-center justify-center transition active:scale-95" title="使い方">
+        <i class="fa-solid fa-question"></i>
+      </button>
+    </div>
+  </header>
+
+  <!-- 盤面メイン領域 -->
+  <main class="flex-1 relative overflow-auto bg-slate-50 bg-grid p-4 md:p-6" style="-webkit-overflow-scrolling: touch;">
+    <div id="zoomContainer" class="origin-top-left transition-transform duration-150">
+      <div id="boardCanvas" class="relative mx-auto min-w-[1020px] min-h-[680px]">
+        <svg id="arrowLayer" class="absolute inset-0 w-full h-full pointer-events-none z-10"></svg>
+        <div id="labelLayer" class="absolute inset-0 z-30 pointer-events-none"></div>
+        <div id="nodeLayer" class="absolute inset-0 z-20 pointer-events-none"></div>
+      </div>
+    </div>
+
+    <!-- スマホ・タブレット用 ズーム操作バー -->
+    <div class="fixed right-3 bottom-[180px] md:bottom-36 z-40 flex flex-col gap-1.5 bg-white/95 backdrop-blur-xs p-1 rounded-xl shadow-lg border border-slate-200">
+      <button id="zoomInBtn" class="w-8 h-8 rounded-lg bg-slate-50 hover:bg-slate-100 active:bg-slate-200 text-slate-700 flex items-center justify-center font-bold text-sm" title="拡大">
+        <i class="fa-solid fa-plus"></i>
+      </button>
+      <button id="zoomResetBtn" class="w-8 h-8 rounded-lg bg-slate-50 hover:bg-slate-100 active:bg-slate-200 text-slate-700 flex items-center justify-center font-bold text-[10px]" title="倍率リセット">
+        <span id="zoomPercentText">100%</span>
+      </button>
+      <button id="zoomOutBtn" class="w-8 h-8 rounded-lg bg-slate-50 hover:bg-slate-100 active:bg-slate-200 text-slate-700 flex items-center justify-center font-bold text-sm" title="縮小">
+        <i class="fa-solid fa-minus"></i>
+      </button>
+      <button id="zoomFitBtn" class="w-8 h-8 rounded-lg bg-indigo-50 hover:bg-indigo-100 active:bg-indigo-200 text-indigo-700 flex items-center justify-center font-bold text-xs" title="全体表示">
+        <i class="fa-solid fa-compress"></i>
+      </button>
+    </div>
+  </main>
+
+  <!-- 下部：カードトレイ (構造式または試薬カード) -->
+  <footer class="bg-white border-t border-slate-200 p-2 shrink-0 z-40 shadow-lg">
+    <div class="max-w-6xl mx-auto flex flex-col gap-1">
+      <div class="flex items-center justify-between px-1">
+        <div class="text-[11px] font-bold text-slate-600 flex items-center gap-1.5 flex-1 mr-2 overflow-hidden">
+          <i class="fa-solid fa-arrows-left-right text-indigo-500 shrink-0"></i>
+          <span id="instructionText" class="truncate">左右スワイプでカードを選択 / タップして配置</span>
+        </div>
+        <div id="deckRemainingText" class="text-xs font-extrabold text-indigo-600 shrink-0">残り: 0個</div>
+      </div>
+      <!-- 選択中カード案内バナー (タップ操作時に表示) -->
+      <div id="selectionBanner" class="hidden items-center justify-between bg-indigo-50 border border-indigo-200 px-2.5 py-1 rounded-lg text-xs font-bold text-indigo-900">
+        <span class="flex items-center gap-1.5 truncate">
+          <span class="w-2 h-2 rounded-full bg-indigo-600 animate-ping shrink-0"></span>
+          <span id="selectionBannerText" class="truncate">カードを選択中</span>
+        </span>
+        <button id="cancelSelectBtn" class="shrink-0 ml-2 text-[10px] bg-white border border-indigo-300 hover:bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded font-semibold active:scale-95">選択解除</button>
+      </div>
+      <div id="cardRack" class="flex items-center gap-2 overflow-x-auto py-1.5 px-1 min-h-[95px] overscroll-x-contain scroll-smooth" style="-webkit-overflow-scrolling: touch; touch-action: pan-x;">
+        <!-- JSでカード動的生成 -->
+      </div>
+    </div>
+  </footer>
+
+  <!-- トースト通知 -->
+  <div id="toastMessage" class="fixed top-14 left-1/2 -translate-x-1/2 px-4 py-2 rounded-full text-white text-xs font-bold shadow-xl transition-all duration-300 opacity-0 pointer-events-none z-50 flex items-center gap-2">
+    <span id="toastText">メッセージ</span>
+  </div>
+
+  <script>
+    /* ケクレ構造式（交互二重結合）およびオルト配向を厳密に描画するSVGライブラリ */
+    const ChemSVG = {
+      // ケクレ構造ベンゼン環 (中心 cx, cy, 半径 r)
+      benzeneRing(cx, cy, r = 18, alternate = 0) {
+        const vertices = [];
+        for (let i = 0; i < 6; i++) {
+          const angle = (Math.PI / 180) * (60 * i - 90);
+          vertices.push({
+            x: cx + r * Math.cos(angle),
+            y: cy + r * Math.sin(angle)
+          });
+        }
+
+        const polyPoints = vertices.map(v => `${v.x.toFixed(1)},${v.y.toFixed(1)}`).join(' ');
+        const poly = `<polygon points="${polyPoints}" fill="none" stroke="#1e293b" stroke-width="1.8" stroke-linejoin="round" />`;
+
+        // 交互のケクレ二重結合
+        let doubleBonds = '';
+        const pairs = alternate === 0 ? [[0, 1], [2, 3], [4, 5]] : [[1, 2], [3, 4], [5, 0]];
+        const shrink = 0.72;
+        const trim = 0.14;
+
+        pairs.forEach(([a, b]) => {
+          const vA = vertices[a];
+          const vB = vertices[b];
+          const inA = { x: cx + (vA.x - cx) * shrink, y: cy + (vA.y - cy) * shrink };
+          const inB = { x: cx + (vB.x - cx) * shrink, y: cy + (vB.y - cy) * shrink };
+          const dx = inB.x - inA.x;
+          const dy = inB.y - inA.y;
+          const x1 = inA.x + dx * trim;
+          const y1 = inA.y + dy * trim;
+          const x2 = inB.x - dx * trim;
+          const y2 = inB.y - dy * trim;
+          doubleBonds += `<line x1="${x1.toFixed(1)}" y1="${y1.toFixed(1)}" x2="${x2.toFixed(1)}" y2="${y2.toFixed(1)}" stroke="#1e293b" stroke-width="1.5" stroke-linecap="round" />`;
+        });
+
+        return poly + doubleBonds;
+      },
+
+      benzene() {
+        return `
+          <svg class="chem-svg" width="60" height="52" viewBox="0 0 60 52">
+            ${this.benzeneRing(30, 26, 17)}
+          </svg>
+        `;
+      },
+
+      mono(subText) {
+        return `
+          <svg class="chem-svg" width="70" height="56" viewBox="0 0 70 56">
+            ${this.benzeneRing(35, 36, 15)}
+            <line x1="35" y1="21" x2="35" y2="13" stroke="#1e293b" stroke-width="1.8" />
+            <text x="35" y="10" font-size="8.5" font-family="'Helvetica Neue', Arial, sans-serif" font-weight="bold" fill="#0f172a" text-anchor="middle">${subText}</text>
+          </svg>
+        `;
+      },
+
+      nitrobenzene() { return this.mono('NO₂'); },
+      aniline() { return this.mono('NH₂'); },
+      anilineHCl() { return this.mono('NH₃Cl'); },
+      acetanilide() { return this.mono('NHCOCH₃'); },
+      sulfonic() { return this.mono('SO₃H'); },
+      phenoxide() { return this.mono('ONa'); },
+      phenol() { return this.mono('OH'); },
+      toluene() { return this.mono('CH₃'); },
+      chlorobenzene() { return this.mono('Cl'); },
+
+      // 塩化ベンゼンジアゾニウム（N2Clで簡潔に統一）
+      diazonium() {
+        return `
+          <svg class="chem-svg" width="72" height="56" viewBox="0 0 72 56">
+            ${this.benzeneRing(36, 36, 15)}
+            <line x1="36" y1="21" x2="36" y2="13" stroke="#1e293b" stroke-width="1.8" />
+            <text x="36" y="10" font-size="8.5" font-family="'Helvetica Neue', Arial, sans-serif" font-weight="bold" fill="#0f172a" text-anchor="middle">N₂Cl</text>
+          </svg>
+        `;
+      },
+
+      /* オルト二置換ベンゼン環 (1位: 上(-90度), 2位: 右上(-30度)) */
+      orthoDisubstituted(pos1Text, pos2Text, isPos2Long = false) {
+        const cx = 30;
+        const cy = 34;
+        const r = 14.5;
+        // 頂点0 (1位: 上), 頂点1 (2位: 右上 30°上方)
+        const v0 = { x: cx, y: cy - r };
+        const v1 = { x: cx + r * Math.cos(-Math.PI / 6), y: cy + r * Math.sin(-Math.PI / 6) };
+
+        // 結合線の終点
+        const b0End = { x: cx, y: v0.y - 8 };
+        const bondLen = 9;
+        const b1End = { 
+          x: v1.x + bondLen * Math.cos(-Math.PI / 6), 
+          y: v1.y + bondLen * Math.sin(-Math.PI / 6) 
+        };
+
+        const w = isPos2Long ? 102 : 92;
+        return `
+          <svg class="chem-svg" width="${w}" height="56" viewBox="0 0 ${w} 56">
+            ${this.benzeneRing(cx, cy, r)}
+            <!-- 1位の置換基 (オルト位 OH または OCOCH3) -->
+            <line x1="${v0.x}" y1="${v0.y}" x2="${b0End.x}" y2="${b0End.y}" stroke="#1e293b" stroke-width="1.8" />
+            <text x="${b0End.x}" y="${b0End.y - 2}" font-size="8" font-family="Arial, sans-serif" font-weight="bold" fill="#0f172a" text-anchor="middle">${pos1Text}</text>
+            <!-- 2位の置換基 (オルト位 COOH, COONa, COOCH3) -->
+            <line x1="${v1.x.toFixed(1)}" y1="${v1.y.toFixed(1)}" x2="${b1End.x.toFixed(1)}" y2="${b1End.y.toFixed(1)}" stroke="#1e293b" stroke-width="1.8" />
+            <text x="${(b1End.x + 3).toFixed(1)}" y="${(b1End.y + 3).toFixed(1)}" font-size="7.5" font-family="Arial, sans-serif" font-weight="bold" fill="#0f172a" text-anchor="start">${pos2Text}</text>
+          </svg>
+        `;
+      },
+
+      salicylicAcid() {
+        return this.orthoDisubstituted('OH', 'COOH');
+      },
+
+      salicylateNa() {
+        return this.orthoDisubstituted('OH', 'COONa');
+      },
+
+      methylSalicylate() {
+        return this.orthoDisubstituted('OH', 'COOCH₃', true);
+      },
+
+      // アセチルサリチル酸: ベンゼン環炭素から酸素Oに結合線が伸び、O-COCH3となるよう厳密に描画
+      acetylsalicylicAcid() {
+        const cx = 30;
+        const cy = 34;
+        const r = 14.5;
+        const v0 = { x: cx, y: cy - r };
+        const v1 = { x: cx + r * Math.cos(-Math.PI / 6), y: cy + r * Math.sin(-Math.PI / 6) };
+
+        // 1位: 環炭素 -> O への結合
+        const b0End = { x: cx, y: v0.y - 7 };
+        const bondLen = 9;
+        const b1End = { 
+          x: v1.x + bondLen * Math.cos(-Math.PI / 6), 
+          y: v1.y + bondLen * Math.sin(-Math.PI / 6) 
+        };
+
+        const w = 104;
+        return `
+          <svg class="chem-svg" width="${w}" height="56" viewBox="0 0 ${w} 56">
+            ${this.benzeneRing(cx, cy, r)}
+            <!-- 1位の置換基: 環炭素から直接 O に結合し、COCH3 が続く -->
+            <line x1="${v0.x}" y1="${v0.y}" x2="${b0End.x}" y2="${b0End.y}" stroke="#1e293b" stroke-width="1.8" />
+            <!-- Oの位置を結合線の終点に正確に合わせる -->
+            <text x="${b0End.x - 14}" y="${b0End.y - 2}" font-size="8" font-family="'Helvetica Neue', Arial, sans-serif" font-weight="bold" fill="#0f172a" text-anchor="start">O—COCH₃</text>
+            <!-- 2位の置換基 (オルト位 COOH) -->
+            <line x1="${v1.x.toFixed(1)}" y1="${v1.y.toFixed(1)}" x2="${b1End.x.toFixed(1)}" y2="${b1End.y.toFixed(1)}" stroke="#1e293b" stroke-width="1.8" />
+            <text x="${(b1End.x + 3).toFixed(1)}" y="${(b1End.y + 3).toFixed(1)}" font-size="7.5" font-family="'Helvetica Neue', Arial, sans-serif" font-weight="bold" fill="#0f172a" text-anchor="start">COOH</text>
+          </svg>
+        `;
+      },
+
+      pDichlorobenzene() {
+        return `
+          <svg class="chem-svg" width="60" height="56" viewBox="0 0 60 56">
+            ${this.benzeneRing(30, 28, 14)}
+            <line x1="30" y1="14" x2="30" y2="8" stroke="#1e293b" stroke-width="1.8" />
+            <text x="30" y="7" font-size="8.5" font-family="Arial, sans-serif" font-weight="bold" fill="#0f172a" text-anchor="middle">Cl</text>
+            <line x1="30" y1="42" x2="30" y2="48" stroke="#1e293b" stroke-width="1.8" />
+            <text x="30" y="55" font-size="8.5" font-family="Arial, sans-serif" font-weight="bold" fill="#0f172a" text-anchor="middle">Cl</text>
+          </svg>
+        `;
+      },
+
+      tnt() {
+        return `
+          <svg class="chem-svg" width="76" height="56" viewBox="0 0 76 56">
+            ${this.benzeneRing(38, 30, 14)}
+            <line x1="38" y1="16" x2="38" y2="10" stroke="#1e293b" stroke-width="1.8" />
+            <text x="38" y="9" font-size="8" font-family="Arial, sans-serif" font-weight="bold" fill="#0f172a" text-anchor="middle">CH₃</text>
+            <text x="14" y="25" font-size="7" font-family="Arial, sans-serif" font-weight="bold" fill="#0f172a" text-anchor="middle">O₂N</text>
+            <text x="62" y="25" font-size="7" font-family="Arial, sans-serif" font-weight="bold" fill="#0f172a" text-anchor="middle">NO₂</text>
+            <line x1="38" y1="44" x2="38" y2="49" stroke="#1e293b" stroke-width="1.8" />
+            <text x="38" y="55" font-size="7" font-family="Arial, sans-serif" font-weight="bold" fill="#0f172a" text-anchor="middle">NO₂</text>
+          </svg>
+        `;
+      },
+
+      azobenzene() {
+        return `
+          <svg class="chem-svg" width="130" height="46" viewBox="0 0 130 46">
+            ${this.benzeneRing(18, 23, 12)}
+            <line x1="30" y1="23" x2="44" y2="23" stroke="#1e293b" stroke-width="1.6" />
+            <text x="54" y="26" font-size="8" font-family="Arial, sans-serif" font-weight="bold" fill="#0f172a" text-anchor="middle">N=N</text>
+            <line x1="64" y1="23" x2="78" y2="23" stroke="#1e293b" stroke-width="1.6" />
+            ${this.benzeneRing(90, 23, 12)}
+            <line x1="102" y1="23" x2="111" y2="23" stroke="#1e293b" stroke-width="1.6" />
+            <text x="120" y="26" font-size="8" font-family="Arial, sans-serif" font-weight="bold" fill="#0f172a" text-anchor="middle">OH</text>
+          </svg>
+        `;
+      },
+
+      cumene() {
+        return `
+          <svg class="chem-svg" width="82" height="54" viewBox="0 0 82 54">
+            ${this.benzeneRing(41, 34, 15)}
+            <line x1="41" y1="19" x2="41" y2="12" stroke="#1e293b" stroke-width="1.8" />
+            <text x="41" y="9" font-size="7.5" font-family="Arial, sans-serif" font-weight="bold" fill="#0f172a" text-anchor="middle">CH(CH₃)₂</text>
+          </svg>
+        `;
+      },
+
+      cumeneHydroperoxide() {
+        return `
+          <svg class="chem-svg" width="86" height="54" viewBox="0 0 86 54">
+            ${this.benzeneRing(43, 34, 15)}
+            <line x1="43" y1="19" x2="43" y2="12" stroke="#1e293b" stroke-width="1.8" />
+            <text x="43" y="9" font-size="7" font-family="Arial, sans-serif" font-weight="bold" fill="#0f172a" text-anchor="middle">C(CH₃)₂OOH</text>
+          </svg>
+        `;
+      },
+
+      acetone() {
+        return `<div class="font-extrabold text-xs text-slate-900 tracking-tight text-center">CH₃—CO—CH₃</div>`;
+      },
+
+      aliphatic(formulaHtml) {
+        return `<div class="font-extrabold text-xs text-slate-900 tracking-tight text-center py-1">${formulaHtml}</div>`;
+      }
+    };
+  </script>
+
+  <script>
+    const CARD_W = 146;
+    const CARD_H = 72;
+
+    /* 各系統図データ（構造式当てと条件当ての双方に対応） */
+    const DIAGRAMS = {
+      // 1. 芳香族化合物の相互関係 (ベンゼン以外すべてを空欄化)
+      exam_aromatic: {
+        title: "芳香族化合物の相互関係",
+        center: {
+          id: "center_benz_exam",
+          svg: ChemSVG.benzene(),
+          name: "ベンゼン",
+          x: 100, y: 250
+        },
+        slots: [
+          {
+            id: "ar_A",
+            labelCode: "A",
+            svg: ChemSVG.nitrobenzene(),
+            name: "ニトロベンゼン",
+            x: 100, y: 80,
+            reagentCondition: {
+              reagentText: "濃H₂SO₄ + 濃HNO₃",
+              actionText: "ニトロ化",
+              code: "ア",
+              detail: "混酸でニトロ化"
+            }
+          },
+          {
+            id: "ar_aniline",
+            svg: ChemSVG.aniline(),
+            name: "アニリン",
+            x: 370, y: 80,
+            fromSlot: "ar_A",
+            reagentCondition: {
+              reagentText: "①Sn, HCl 還元 ②NaOH",
+              actionText: "還元・弱塩基遊離",
+              detail: "ニトロ基の還元とアニリンの遊離"
+            }
+          },
+          {
+            id: "ar_B",
+            labelCode: "B",
+            svg: ChemSVG.acetanilide(),
+            name: "アセトアニリド",
+            x: 770, y: 80,
+            fromSlot: "ar_aniline",
+            reagentCondition: {
+              reagentText: "(CH₃CO)₂O (無水酢酸)",
+              actionText: "アセチル化",
+              code: "イ",
+              detail: "アミノ基のアセチル化"
+            }
+          },
+          {
+            id: "ar_diazonium",
+            svg: ChemSVG.diazonium(),
+            name: "塩化ベンゼンジアゾニウム",
+            x: 570, y: 220,
+            fromSlot: "ar_aniline",
+            reagentCondition: {
+              reagentText: "NaNO₂ + HCl (5℃以下)",
+              actionText: "ジアゾ化",
+              code: "ウ",
+              detail: "亜硝酸ナトリウムと塩酸"
+            }
+          },
+          {
+            id: "ar_C",
+            labelCode: "C",
+            svg: ChemSVG.phenol(),
+            name: "フェノール",
+            x: 880, y: 220,
+            fromSlot: "ar_diazonium",
+            reagentCondition: {
+              reagentText: "H₂O, 加熱",
+              actionText: "加水分解 (N₂遊離)",
+              detail: "ジアゾニウム塩の熱分解"
+            }
+          },
+          {
+            id: "ar_D",
+            labelCode: "D",
+            svg: ChemSVG.sulfonic(),
+            name: "ベンゼンスルホン酸",
+            x: 100, y: 440,
+            reagentCondition: {
+              reagentText: "濃H₂SO₄ (加熱)",
+              actionText: "スルホン化",
+              code: "エ",
+              detail: "スルホ基の導入"
+            }
+          },
+          {
+            id: "ar_phenoxide",
+            svg: ChemSVG.phenoxide(),
+            name: "ナトリウムフェノキシド",
+            x: 370, y: 440,
+            fromSlot: "ar_D",
+            reagentCondition: {
+              reagentText: "NaOH (アルカリ融解)",
+              actionText: "融解",
+              detail: ""
+            }
+          },
+          {
+            id: "ar_E",
+            labelCode: "E",
+            svg: ChemSVG.azobenzene(),
+            name: "p-ヒドロキシアゾベンゼン",
+            x: 880, y: 360,
+            fromSlot: "ar_phenoxide",
+            reagentCondition: {
+              reagentText: "塩化ベンゼンジアゾニウムと混合",
+              actionText: "ジアゾカップリング",
+              code: "オ",
+              detail: ""
+            }
+          },
+          {
+            id: "ar_salicylic",
+            svg: ChemSVG.salicylicAcid(),
+            name: "サリチル酸",
+            x: 370, y: 590,
+            fromSlot: "ar_phenoxide",
+            reagentCondition: {
+              reagentText: "①CO₂ (高温・高圧) ②H₂SO₄",
+              actionText: "",
+              detail: ""
+            }
+          },
+          {
+            id: "ar_F",
+            labelCode: "F",
+            svg: ChemSVG.methylSalicylate(),
+            name: "サリチル酸メチル",
+            x: 100, y: 590,
+            fromSlot: "ar_salicylic",
+            reagentCondition: {
+              reagentText: "CH₃OH + 濃H₂SO₄",
+              actionText: "エステル化",
+              code: "カ",
+              detail: "カルボキシ基のエステル化"
+            }
+          },
+          {
+            id: "ar_G",
+            labelCode: "G",
+            svg: ChemSVG.acetylsalicylicAcid(),
+            name: "アセチルサリチル酸",
+            x: 770, y: 590,
+            fromSlot: "ar_salicylic",
+            reagentCondition: {
+              reagentText: "(CH₃CO)₂O (無水酢酸)",
+              actionText: "アセチル化",
+              code: "キ",
+              detail: "フェノール性-OHのアセチル化"
+            }
+          }
+        ]
+      },
+
+      // 2. サリチル酸の合成と誘導体
+      salicylic: {
+        title: "サリチル酸の合成と誘導体",
+        center: {
+          id: "center_sal_phenoxide",
+          svg: ChemSVG.phenoxide(),
+          name: "ナトリウムフェノキシド",
+          x: 120, y: 280
+        },
+        slots: [
+          {
+            id: "sal_1",
+            svg: ChemSVG.salicylateNa(),
+            name: "サリチル酸ナトリウム",
+            x: 380, y: 280,
+            reagentCondition: {
+              code: "a",
+              reagentText: "CO₂ (高温・高圧)",
+              actionText: "高温高圧反応",
+              detail: "フェノキシドに二酸化炭素を作用"
+            }
+          },
+          {
+            id: "sal_2",
+            svg: ChemSVG.salicylicAcid(),
+            name: "サリチル酸",
+            x: 640, y: 280,
+            fromSlot: "sal_1",
+            reagentCondition: {
+              code: "b",
+              reagentText: "希硫酸 (H⁺)",
+              actionText: "弱酸の遊離",
+              detail: "弱酸の塩に強酸を加えて遊離"
+            }
+          },
+          {
+            id: "sal_3",
+            labelCode: "A",
+            svg: ChemSVG.methylSalicylate(),
+            name: "サリチル酸メチル",
+            x: 910, y: 160,
+            fromSlot: "sal_2",
+            reagentCondition: {
+              code: "Aへ",
+              reagentText: "CH₃OH + 濃H₂SO₄",
+              actionText: "エステル化 (加熱)",
+              detail: "消炎鎮痛剤(湿布)を合成"
+            }
+          },
+          {
+            id: "sal_4",
+            labelCode: "B",
+            svg: ChemSVG.acetylsalicylicAcid(),
+            name: "アセチルサリチル酸",
+            x: 910, y: 400,
+            fromSlot: "sal_2",
+            reagentCondition: {
+              code: "Bへ",
+              reagentText: "(CH₃CO)₂O (無水酢酸)",
+              actionText: "アセチル化",
+              detail: "解熱鎮痛剤(アスピリン)を合成"
+            }
+          }
+        ]
+      },
+
+      // 3. ベンゼンの反応
+      benzene: {
+        title: "ベンゼンの反応",
+        center: {
+          id: "center_benzene",
+          svg: ChemSVG.benzene(),
+          name: "ベンゼン",
+          x: 390, y: 200
+        },
+        slots: [
+          {
+            id: "benz_1",
+            svg: ChemSVG.sulfonic(),
+            name: "ベンゼンスルホン酸",
+            x: 120, y: 130,
+            reagentCondition: {
+              reagentText: "濃H₂SO₄ (加熱)",
+              actionText: "スルホン化",
+              detail: "置換反応"
+            }
+          },
+          {
+            id: "benz_2",
+            svg: ChemSVG.nitrobenzene(),
+            name: "ニトロベンゼン",
+            x: 120, y: 430,
+            reagentCondition: {
+              reagentText: "HNO₃ + 濃H₂SO₄",
+              actionText: "ニトロ化",
+              detail: "置換反応"
+            }
+          },
+          {
+            id: "benz_3",
+            svg: ChemSVG.aliphatic("C₆H₁₂ (シクロヘキサン)"),
+            name: "シクロヘキサン",
+            x: 390, y: 450,
+            reagentCondition: {
+              reagentText: "H₂ [Ni触媒]",
+              actionText: "付加反応",
+              detail: "ベンゼン環への水素付加"
+            }
+          },
+          {
+            id: "benz_4",
+            svg: ChemSVG.chlorobenzene(),
+            name: "クロロベンゼン",
+            x: 670, y: 130,
+            reagentCondition: {
+              reagentText: "Cl₂ [鉄粉触媒]",
+              actionText: "塩素化",
+              detail: "置換反応"
+            }
+          },
+          {
+            id: "benz_5",
+            svg: ChemSVG.pDichlorobenzene(),
+            name: "p-ジクロロベンゼン",
+            x: 910, y: 130,
+            fromSlot: "benz_4",
+            reagentCondition: {
+              reagentText: "Cl₂ [鉄粉触媒]",
+              actionText: "塩素化",
+              detail: "パラ位への置換"
+            }
+          },
+          {
+            id: "benz_6",
+            svg: ChemSVG.toluene(),
+            name: "トルエン",
+            x: 670, y: 430,
+            reagentCondition: {
+              reagentText: "CH₃Cl [AlCl₃触媒]",
+              actionText: "アルキル化",
+              detail: "フリーデル・クラフツ反応"
+            }
+          },
+          {
+            id: "benz_7",
+            svg: ChemSVG.tnt(),
+            name: "2,4,6-トリニトロトルエン (TNT)",
+            x: 910, y: 430,
+            fromSlot: "benz_6",
+            reagentCondition: {
+              reagentText: "HNO₃ + 濃H₂SO₄",
+              actionText: "ニトロ化 (加熱)",
+              detail: "トルエンのニトロ化"
+            }
+          }
+        ]
+      },
+
+      // 4. アニリン・ジアゾ
+      aniline: {
+        title: "窒素を含む芳香族化合物",
+        center: {
+          id: "center_anil_nitro",
+          svg: ChemSVG.nitrobenzene(),
+          name: "ニトロベンゼン",
+          x: 150, y: 130
+        },
+        slots: [
+          {
+            id: "anl_1",
+            svg: ChemSVG.anilineHCl(),
+            name: "アニリン塩酸塩",
+            x: 150, y: 410,
+            reagentCondition: {
+              reagentText: "Sn + 濃HCl",
+              actionText: "還元反応",
+              detail: "ニトロ基をアミノ基へ還元"
+            }
+          },
+          {
+            id: "anl_2",
+            svg: ChemSVG.aniline(),
+            name: "アニリン",
+            x: 480, y: 130,
+            fromSlot: "anl_1",
+            reagentCondition: {
+              reagentText: "NaOH水溶液",
+              actionText: "弱塩基の遊離",
+              detail: "塩酸塩から遊離アニリンを得る"
+            }
+          },
+          {
+            id: "anl_3",
+            svg: ChemSVG.acetanilide(),
+            name: "アセトアニリド",
+            x: 820, y: 130,
+            fromSlot: "anl_2",
+            reagentCondition: {
+              reagentText: "(CH₃CO)₂O (無水酢酸)",
+              actionText: "アセチル化",
+              detail: "アミノ基の保護・アミド化"
+            }
+          },
+          {
+            id: "anl_4",
+            svg: ChemSVG.diazonium(),
+            name: "塩化ベンゼンジアゾニウム",
+            x: 480, y: 410,
+            fromSlot: "anl_1",
+            reagentCondition: {
+              reagentText: "NaNO₂ + HCl (5℃以下)",
+              actionText: "ジアゾ化",
+              detail: "不安定なジアゾニウム塩を生成"
+            }
+          },
+          {
+            id: "anl_5",
+            svg: ChemSVG.azobenzene(),
+            name: "p-ヒドロキシアゾベンゼン",
+            x: 820, y: 410,
+            fromSlot: "anl_4",
+            reagentCondition: {
+              reagentText: "ナトリウムフェノキシド",
+              actionText: "ジアゾカップリング",
+              detail: "橙赤色のアゾ染料を生成"
+            }
+          }
+        ]
+      },
+
+      // 5. クメン法
+      cumene: {
+        title: "クメン法＆フェノール製法",
+        center: {
+          id: "center_cum_benz",
+          svg: ChemSVG.benzene(),
+          name: "ベンゼン",
+          x: 120, y: 280
+        },
+        slots: [
+          {
+            id: "cum_1",
+            svg: ChemSVG.cumene(),
+            name: "クメン",
+            x: 370, y: 140,
+            reagentCondition: {
+              reagentText: "CH₃CH=CH₂ (プロペン)",
+              actionText: "付加・アルキル化",
+              detail: "触媒存在下での付加"
+            }
+          },
+          {
+            id: "cum_2",
+            svg: ChemSVG.cumeneHydroperoxide(),
+            name: "クメンヒドロペルオキシド",
+            x: 640, y: 140,
+            fromSlot: "cum_1",
+            reagentCondition: {
+              reagentText: "O₂ (空気酸化)",
+              actionText: "酸化反応",
+              detail: "過酸化物を生成"
+            }
+          },
+          {
+            id: "cum_3",
+            svg: ChemSVG.phenol(),
+            name: "フェノール",
+            x: 900, y: 140,
+            fromSlot: "cum_2",
+            reagentCondition: {
+              reagentText: "希硫酸 (H₂SO₄)",
+              actionText: "酸分解",
+              detail: "フェノールとアセトンに分解"
+            }
+          },
+          {
+            id: "cum_4",
+            svg: ChemSVG.acetone(),
+            name: "アセトン (副生)",
+            x: 900, y: 300,
+            fromSlot: "cum_2",
+            fixedReagent: "副生 (ケトン)"
+          },
+          {
+            id: "cum_5",
+            svg: ChemSVG.phenoxide(),
+            name: "ナトリウムフェノキシド",
+            x: 500, y: 440,
+            reagentCondition: {
+              reagentText: "NaOH (アルカリ融解)",
+              actionText: "アルカリ融解",
+              detail: "旧フェノール製法"
+            }
+          }
+        ]
+      },
+
+      // 6. アセチレン
+      acetylene: {
+        title: "アセチレンの反応",
+        center: {
+          id: "center_c2h2",
+          svg: ChemSVG.aliphatic("H—C≡C—H"),
+          name: "アセチレン",
+          x: 480, y: 280
+        },
+        slots: [
+          {
+            id: "act_1",
+            svg: ChemSVG.aliphatic("CH₂=CH₂"),
+            name: "エチレン",
+            x: 480, y: 70,
+            reagentCondition: {
+              reagentText: "H₂ [Pt / Ni]",
+              actionText: "水素付加",
+              detail: "三重結合から二重結合へ"
+            }
+          },
+          {
+            id: "act_2",
+            svg: ChemSVG.aliphatic("CH₃CHO"),
+            name: "アセトアルデヒド",
+            x: 180, y: 80,
+            reagentCondition: {
+              reagentText: "H₂O [HgSO₄/H₂SO₄]",
+              actionText: "水付加",
+              detail: "ビニルアルコールを経て変化"
+            }
+          },
+          {
+            id: "act_3",
+            svg: ChemSVG.aliphatic("CH₂=CHCl"),
+            name: "塩化ビニル",
+            x: 170, y: 280,
+            reagentCondition: {
+              reagentText: "HCl [HgCl₂]",
+              actionText: "塩化水素付加",
+              detail: "ビニルモノマーの生成"
+            }
+          },
+          {
+            id: "act_4",
+            svg: ChemSVG.aliphatic("CH₂=CHOCOCH₃"),
+            name: "酢酸ビニル",
+            x: 180, y: 480,
+            reagentCondition: {
+              reagentText: "CH₃COOH [触媒]",
+              actionText: "酢酸付加",
+              detail: "合成高分子の原料"
+            }
+          },
+          {
+            id: "act_5",
+            svg: ChemSVG.aliphatic("CH₂=CHCN"),
+            name: "アクリロニトリル",
+            x: 480, y: 490,
+            reagentCondition: {
+              reagentText: "HCN",
+              actionText: "シアン化水素付加",
+              detail: "アクリル繊維の原料"
+            }
+          },
+          {
+            id: "act_7",
+            svg: ChemSVG.benzene(),
+            name: "ベンゼン",
+            x: 800, y: 280,
+            reagentCondition: {
+              reagentText: "加熱 [Fe触媒]",
+              actionText: "三分子重合 (環化)",
+              detail: "アセチレン3分子から生成"
+            }
+          },
+          {
+            id: "act_6",
+            svg: ChemSVG.aliphatic("[—CH=CH—]ₙ"),
+            name: "ポリアセチレン",
+            x: 800, y: 480,
+            reagentCondition: {
+              reagentText: "チーグラー・ナッタ触媒",
+              actionText: "付加重合",
+              detail: "導電性高分子"
+            }
+          }
+        ]
+      },
+
+      // 7. エチレン
+      ethylene: {
+        title: "エチレンの反応",
+        center: {
+          id: "center_c2h4",
+          svg: ChemSVG.aliphatic("H₂C=CH₂"),
+          name: "エチレン",
+          x: 480, y: 270
+        },
+        slots: [
+          {
+            id: "eth_1",
+            svg: ChemSVG.aliphatic("CH₃CH₂OH"),
+            name: "エタノール",
+            x: 480, y: 70,
+            reagentCondition: {
+              reagentText: "H₂O [H₃PO₄ / 高温高圧]",
+              actionText: "水付加",
+              detail: "アルコールの工業的製法"
+            }
+          },
+          {
+            id: "eth_2",
+            svg: ChemSVG.aliphatic("CH₃CH₃"),
+            name: "エタン",
+            x: 160, y: 80,
+            reagentCondition: {
+              reagentText: "H₂ [Ni触媒]",
+              actionText: "水素付加",
+              detail: "アルカンを生成"
+            }
+          },
+          {
+            id: "eth_3",
+            svg: ChemSVG.aliphatic("CH₂BrCH₂Br"),
+            name: "1,2-ジブロモエタン",
+            x: 160, y: 270,
+            reagentCondition: {
+              reagentText: "Br₂ (赤褐色脱色)",
+              actionText: "臭素付加",
+              detail: "不飽和結合の検出"
+            }
+          },
+          {
+            id: "eth_4",
+            svg: ChemSVG.aliphatic("CH₂ClCH₂Cl"),
+            name: "1,2-ジクロロエタン",
+            x: 160, y: 460,
+            reagentCondition: {
+              reagentText: "Cl₂",
+              actionText: "塩素付加",
+              detail: "ジハロゲン化物の生成"
+            }
+          },
+          {
+            id: "eth_5",
+            svg: ChemSVG.aliphatic("CH₂=CHCl"),
+            name: "塩化ビニル",
+            x: 480, y: 460,
+            fromSlot: "eth_4",
+            reagentCondition: {
+              reagentText: "加熱 (−HCl)",
+              actionText: "熱分解・脱塩化水素",
+              detail: "二重結合の再生"
+            }
+          },
+          {
+            id: "eth_6",
+            svg: ChemSVG.aliphatic("[—CH₂—CH₂—]ₙ"),
+            name: "ポリエチレン",
+            x: 800, y: 270,
+            reagentCondition: {
+              reagentText: "触媒 / 高圧",
+              actionText: "付加重合",
+              detail: "汎用プラスチックの合成"
+            }
+          },
+          {
+            id: "eth_7",
+            svg: ChemSVG.aliphatic("[—CH₂—CHCl—]ₙ"),
+            name: "ポリ塩化ビニル",
+            x: 800, y: 460,
+            fromSlot: "eth_5",
+            reagentCondition: {
+              reagentText: "重合開始剤",
+              actionText: "付加重合",
+              detail: "塩化ビニルの重合"
+            }
+          }
+        ]
+      },
+
+      // 8. エタノール
+      ethanol: {
+        title: "エタノールの反応",
+        center: {
+          id: "center_c2h5oh",
+          svg: ChemSVG.aliphatic("CH₃CH₂OH"),
+          name: "エタノール",
+          x: 480, y: 170
+        },
+        slots: [
+          {
+            id: "etoh_1",
+            svg: ChemSVG.aliphatic("CH₂=CH₂"),
+            name: "エチレン",
+            x: 160, y: 170,
+            reagentCondition: {
+              reagentText: "濃H₂SO₄ (160〜170℃)",
+              actionText: "分子内脱水",
+              detail: "高温でアルケンを生成"
+            }
+          },
+          {
+            id: "etoh_2",
+            svg: ChemSVG.aliphatic("C₂H₅OC₂H₅"),
+            name: "ジエチルエーテル",
+            x: 800, y: 170,
+            reagentCondition: {
+              reagentText: "濃H₂SO₄ (130〜140℃)",
+              actionText: "分子間脱水",
+              detail: "中温でエーテルを生成"
+            }
+          },
+          {
+            id: "etoh_3",
+            svg: ChemSVG.aliphatic("CH₃CH₂ONa"),
+            name: "ナトリウムエトキシド",
+            x: 160, y: 410,
+            reagentCondition: {
+              reagentText: "Na (金属ナトリウム)",
+              actionText: "水素発生 (塩形成)",
+              detail: "ヒドロキシ基の水素置換"
+            }
+          },
+          {
+            id: "etoh_4",
+            svg: ChemSVG.aliphatic("CH₃CHO"),
+            name: "アセトアルデヒド",
+            x: 480, y: 410,
+            reagentCondition: {
+              reagentText: "酸化 [K₂Cr₂O₇ / KMnO₄]",
+              actionText: "第一級アルコールの酸化",
+              detail: "アルデヒドへの酸化"
+            }
+          },
+          {
+            id: "etoh_5",
+            svg: ChemSVG.aliphatic("CH₃COOH"),
+            name: "酢酸",
+            x: 800, y: 410,
+            fromSlot: "etoh_4",
+            reagentCondition: {
+              reagentText: "さらに酸化",
+              actionText: "カルボン酸への酸化",
+              detail: "アルデヒドの酸化"
+            }
+          }
+        ]
+      }
+    };
+  </script>
+  <script>
+    let currentDiagramKey = 'ethylene';
+    let currentQuizType = 'structure'; // 'structure' または 'reagent'
+
+    let gameState = {
+      placed: {},
+      deck: [],
+      selectedCardId: null
+    };
+
+    let currentZoom = 1.0;
+    const isTouchDevice = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
+
+    let elements = {};
+
+    function updateProgress() {
+      const diagData = DIAGRAMS[currentDiagramKey];
+      if (!diagData) return;
+      const total = currentQuizType === "reagent"
+        ? diagData.slots.filter(s => s.reagentCondition).length
+        : diagData.slots.filter(s => !s.fixed).length;
+      const current = Object.keys(gameState.placed).length;
+
+      if (elements.scoreText) {
+        elements.scoreText.innerText = `${current} / ${total}`;
+      }
+      if (elements.progressBar) {
+        const pct = total > 0 ? (current / total) * 100 : 0;
+        elements.progressBar.style.width = `${pct}%`;
+      }
+    }
+
+    function updateTypeButtons() {
+      if (!elements.typeStructureBtn || !elements.typeReagentBtn) return;
+      if (currentQuizType === 'structure') {
+        elements.typeStructureBtn.className = "px-2.5 py-1 text-xs font-bold rounded-md transition-all shadow-xs bg-white text-indigo-700";
+        elements.typeReagentBtn.className = "px-2.5 py-1 text-xs font-bold rounded-md transition-all text-slate-600 hover:text-slate-900";
+      } else {
+        elements.typeStructureBtn.className = "px-2.5 py-1 text-xs font-bold rounded-md transition-all text-slate-600 hover:text-slate-900";
+        elements.typeReagentBtn.className = "px-2.5 py-1 text-xs font-bold rounded-md transition-all shadow-xs bg-white text-indigo-700";
+      }
+    }
+
+    function showToast(text, isSuccess = true) {
+      if (!elements.toastText || !elements.toastMessage) return;
+      elements.toastText.innerText = text;
+      elements.toastMessage.classList.remove('opacity-0', 'bg-rose-600/90', 'bg-slate-900/85');
+      elements.toastMessage.classList.add(isSuccess ? 'bg-slate-900/85' : 'bg-rose-600/90', 'opacity-100');
+      setTimeout(() => {
+        elements.toastMessage.classList.remove('opacity-100');
+        elements.toastMessage.classList.add('opacity-0');
+      }, 1600);
+    }
+
+    function setZoom(scale) {
+      currentZoom = Math.min(Math.max(scale, 0.4), 1.5);
+      const zoomContainer = document.getElementById('zoomContainer');
+      const zoomPercentText = document.getElementById('zoomPercentText');
+      if (zoomContainer) {
+        zoomContainer.style.transform = `scale(${currentZoom})`;
+      }
+      if (zoomPercentText) {
+        zoomPercentText.innerText = `${Math.round(currentZoom * 100)}%`;
+      }
+    }
+
+    function fitToScreen() {
+      const main = document.querySelector('main');
+      if (!main) return;
+      const availableWidth = main.clientWidth - 32;
+      const targetScale = Math.min(availableWidth / 1020, 1.0);
+      setZoom(Math.max(targetScale, 0.45));
+    }
+
+    function highlightTargetSlots(active) {
+      const dropZones = document.querySelectorAll('[data-slot-id]');
+      dropZones.forEach(zone => {
+        const slotId = zone.dataset.slotId;
+        if (!gameState.placed[slotId]) {
+          if (active) {
+            zone.classList.add('slot-awaiting-target');
+          } else {
+            zone.classList.remove('slot-awaiting-target');
+          }
+        }
+      });
+    }
+
+    function updateSelectionBanner() {
+      const banner = document.getElementById('selectionBanner');
+      const bannerText = document.getElementById('selectionBannerText');
+      if (!banner || !bannerText) return;
+
+      if (gameState.selectedCardId) {
+        const card = gameState.deck.find(c => c.id === gameState.selectedCardId);
+        const name = card ? (card.displayName || card.name || card.reagentText) : 'カード';
+        bannerText.innerHTML = `👉 <span class="text-indigo-600 font-extrabold">「${name}」</span> を選択中！ 図の中の空枠をタップしてください`;
+        banner.classList.remove('hidden');
+        banner.classList.add('flex');
+      } else {
+        banner.classList.remove('flex');
+        banner.classList.add('hidden');
+      }
+    }
+
+    function shuffleArray(arr) {
+      for (let i = arr.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [arr[i], arr[j]] = [arr[j], arr[i]];
+      }
+    }
+
+    function getRectIntersection(cx, cy, targetX, targetY, halfW, halfH) {
+      const dx = targetX - cx;
+      const dy = targetY - cy;
+      if (dx === 0 && dy === 0) return { x: cx, y: cy };
+
+      const scaleX = halfW / Math.abs(dx || 0.0001);
+      const scaleY = halfH / Math.abs(dy || 0.0001);
+      const scale = Math.min(scaleX, scaleY);
+
+      return {
+        x: cx + dx * scale,
+        y: cy + dy * scale
+      };
+    }
+
+    function renderBoard() {
+      const diagData = DIAGRAMS[currentDiagramKey];
+      const isReagentQuiz = currentQuizType === "reagent";
+
+      if (!elements.arrowLayer || !elements.labelLayer || !elements.nodeLayer) return;
+
+      elements.arrowLayer.innerHTML = `
+        <defs>
+          <marker id="arrowhead" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+            <polygon points="0 0, 8 3, 0 6" fill="#475569" />
+          </marker>
+        </defs>
+      `;
+      elements.labelLayer.innerHTML = '';
+      elements.nodeLayer.innerHTML = '';
+
+      // 1. 基準物質 (中心ノード)
+      const centerNode = document.createElement('div');
+      centerNode.className = "absolute z-20 -translate-x-1/2 -translate-y-1/2 w-[146px] min-h-[72px] bg-rose-50 border-2 border-rose-400 rounded-xl p-1 flex flex-col items-center justify-center text-center shadow-md select-none pointer-events-auto";
+      centerNode.style.left = `${diagData.center.x}px`;
+      centerNode.style.top = `${diagData.center.y}px`;
+      centerNode.innerHTML = `
+        <div class="text-[8.5px] font-bold tracking-wider text-rose-500 uppercase leading-none mb-0.5">基準物質</div>
+        <div class="w-full flex items-center justify-center">${diagData.center.svg}</div>
+        <div class="text-[10px] font-bold text-rose-900 leading-tight mt-0.5">${diagData.center.name}</div>
+      `;
+      elements.nodeLayer.appendChild(centerNode);
+
+      const halfW = CARD_W / 2;
+      const halfH = CARD_H / 2;
+
+      // 2. スロットと矢印・条件ラベルの配置
+      diagData.slots.forEach(slot => {
+        let startX = diagData.center.x;
+        let startY = diagData.center.y;
+
+        if (slot.fromSlot) {
+          const fromItem = diagData.slots.find(s => s.id === slot.fromSlot);
+          if (fromItem) {
+            startX = fromItem.x;
+            startY = fromItem.y;
+          }
+        }
+
+        const endX = slot.x;
+        const endY = slot.y;
+
+        const p1 = getRectIntersection(startX, startY, endX, endY, halfW + 4, halfH + 4);
+        const p2 = getRectIntersection(endX, endY, startX, startY, halfW + 6, halfH + 6);
+
+        // 矢印線
+        const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
+        line.setAttribute("x1", p1.x);
+        line.setAttribute("y1", p1.y);
+        line.setAttribute("x2", p2.x);
+        line.setAttribute("y2", p2.y);
+        line.setAttribute("stroke", "#475569");
+        line.setAttribute("stroke-width", "2");
+        line.setAttribute("marker-end", "url(#arrowhead)");
+        elements.arrowLayer.appendChild(line);
+
+        // 矢印の上側へ法線方向にオフセット
+        const dx = p2.x - p1.x;
+        const dy = p2.y - p1.y;
+        const len = Math.hypot(dx, dy) || 1;
+
+        let nx = -dy / len;
+        let ny = dx / len;
+        if (ny > 0) { nx = -nx; ny = -ny; }
+
+        const offsetDist = 26;
+        const labelX = (p1.x + p2.x) / 2 + nx * offsetDist;
+        const labelY = (p1.y + p2.y) / 2 + ny * offsetDist;
+
+        if (isReagentQuiz) {
+          // --- 反応条件当てモード ---
+          if (slot.reagentCondition) {
+            const isPlaced = gameState.placed[slot.id];
+            const dropEl = document.createElement('div');
+            dropEl.id = `reagent-slot-${slot.id}`;
+            dropEl.dataset.slotId = slot.id;
+            dropEl.className = "absolute -translate-x-1/2 -translate-y-1/2 min-w-[110px] min-h-[40px] rounded-lg transition-all duration-200 flex flex-col items-center justify-center p-1 text-center cursor-pointer select-none z-30 pointer-events-auto touch-manipulation";
+            dropEl.style.left = `${labelX}px`;
+            dropEl.style.top = `${labelY}px`;
+
+            if (isPlaced) {
+              dropEl.className += " bg-emerald-50 border-2 border-emerald-500 shadow-sm text-emerald-950";
+              dropEl.innerHTML = `
+                <div class="text-[8.5px] font-black text-emerald-700 leading-tight">${slot.reagentCondition.reagentText}</div>
+                ${slot.reagentCondition.actionText ? `<div class="text-[7.5px] font-bold text-emerald-600 leading-tight">${slot.reagentCondition.code ? `[${slot.reagentCondition.code}] ` : ''}${slot.reagentCondition.actionText}</div>` : ''}
+              `;
+            } else {
+              dropEl.className += " bg-white/95 border-2 border-dashed border-indigo-400 hover:border-indigo-600 hover:bg-indigo-50/50 shadow-xs";
+              dropEl.innerHTML = `
+                <div class="text-[9px] font-black text-indigo-700 bg-indigo-100 rounded px-1.5 leading-tight pointer-events-none">
+                  ${slot.reagentCondition.code ? `[ ${slot.reagentCondition.code} ]` : '？'} 条件
+                </div>
+                <div class="text-[7px] font-semibold text-slate-400 pointer-events-none">タップ配置</div>
+              `;
+              setupDropEvents(dropEl, slot.id);
+            }
+            elements.labelLayer.appendChild(dropEl);
+          } else if (slot.fixedReagent) {
+            const fixedLabel = document.createElement('div');
+            fixedLabel.className = "absolute -translate-x-1/2 -translate-y-1/2 bg-white/95 px-2 py-0.5 rounded border border-slate-300 text-center shadow-xs pointer-events-none whitespace-nowrap z-30";
+            fixedLabel.style.left = `${labelX}px`;
+            fixedLabel.style.top = `${labelY}px`;
+            fixedLabel.innerHTML = `<div class="text-[9px] font-bold text-slate-800 leading-tight">${slot.fixedReagent}</div>`;
+            elements.labelLayer.appendChild(fixedLabel);
+          }
+        } else {
+          // --- 構造式当てモード ---
+          if (slot.reagentCondition || slot.fixedReagent) {
+            const label = document.createElement('div');
+            label.className = "absolute -translate-x-1/2 -translate-y-1/2 bg-white/95 px-2 py-0.5 rounded border border-slate-300 text-center shadow-xs pointer-events-none whitespace-nowrap z-30";
+            label.style.left = `${labelX}px`;
+            label.style.top = `${labelY}px`;
+            
+            if (slot.reagentCondition) {
+              label.innerHTML = `
+                <div class="text-[9px] font-bold text-slate-800 leading-tight">${slot.reagentCondition.reagentText}</div>
+                ${slot.reagentCondition.actionText ? `<div class="text-[8px] font-semibold text-blue-600 leading-none mt-0.5">${slot.reagentCondition.code ? `(${slot.reagentCondition.code}) ` : ''}${slot.reagentCondition.actionText}</div>` : ''}
+              `;
+            } else if (slot.fixedReagent) {
+              label.innerHTML = `<div class="text-[9px] font-bold text-slate-800 leading-tight">${slot.fixedReagent}</div>`;
+            }
+            elements.labelLayer.appendChild(label);
+          }
+        }
+
+        // スロット枠（構造式ノード）
+        const slotEl = document.createElement('div');
+        slotEl.id = `slot-${slot.id}`;
+        slotEl.dataset.slotId = slot.id;
+        slotEl.className = "slot-drop-zone absolute -translate-x-1/2 -translate-y-1/2 w-[146px] min-h-[72px] rounded-xl transition-all duration-200 flex flex-col items-center justify-center p-1 text-center select-none pointer-events-auto touch-manipulation";
+        slotEl.style.left = `${slot.x}px`;
+        slotEl.style.top = `${slot.y}px`;
+
+        if (isReagentQuiz || slot.fixed) {
+          slotEl.className += " bg-slate-50 border border-slate-300 card-shadow text-slate-900 cursor-default";
+          slotEl.innerHTML = `
+            <div class="w-full flex items-center justify-center">${slot.svg}</div>
+            <div class="text-[9.5px] font-semibold text-slate-700 leading-tight mt-0.5 line-clamp-1">${slot.name}</div>
+          `;
+        } else {
+          const isPlaced = gameState.placed[slot.id];
+          if (isPlaced) {
+            slotEl.className += " bg-amber-50/90 border-2 border-amber-400 card-shadow text-amber-950";
+            slotEl.innerHTML = `
+              <div class="text-[8px] text-emerald-600 font-bold flex items-center mb-0.5 leading-none">
+                <i class="fa-solid fa-circle-check mr-1"></i>${slot.labelCode ? `[${slot.labelCode}] 正解` : '正解'}
+              </div>
+              <div class="w-full flex items-center justify-center">${isPlaced.svg}</div>
+              <div class="text-[9.5px] font-bold text-amber-900 leading-tight line-clamp-1 mt-0.5">${isPlaced.name}</div>
+            `;
+          } else {
+            slotEl.className += " bg-white/90 border-2 border-dashed border-amber-300 hover:border-amber-500 hover:bg-amber-50/50 cursor-pointer";
+            slotEl.innerHTML = `
+              <div class="text-xs font-black text-amber-500 bg-amber-100 rounded px-1.5 py-0.5 mb-0.5 pointer-events-none">
+                ${slot.labelCode ? `[ ${slot.labelCode} ]` : '+'}
+              </div>
+              <div class="text-[9px] font-medium text-slate-400 pointer-events-none">タップして配置</div>
+            `;
+            setupDropEvents(slotEl, slot.id);
+          }
+        }
+
+        elements.nodeLayer.appendChild(slotEl);
+      });
+    }
+
+    function setupDropEvents(targetEl, expectedId) {
+      targetEl.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        if (!gameState.placed[expectedId]) {
+          targetEl.classList.add('border-blue-500', 'bg-blue-50/60', 'scale-105');
+        }
+      });
+
+      targetEl.addEventListener('dragleave', () => {
+        targetEl.classList.remove('border-blue-500', 'bg-blue-50/60', 'scale-105');
+      });
+
+      targetEl.addEventListener('drop', (e) => {
+        e.preventDefault();
+        targetEl.classList.remove('border-blue-500', 'bg-blue-50/60', 'scale-105');
+        const cardId = e.dataTransfer.getData('text/plain');
+        tryPlaceCard(cardId, expectedId);
+      });
+
+      // 共通タップハンドラー
+      const handleSlotTap = (e) => {
+        e.stopPropagation();
+        if (gameState.placed[expectedId]) return;
+
+        if (gameState.selectedCardId) {
+          tryPlaceCard(gameState.selectedCardId, expectedId);
+        } else {
+          showToast("下のカードをタップして選んでね！", false);
+        }
+      };
+
+      // スマホの確実なタップ処理
+      targetEl.addEventListener('touchend', (e) => {
+        // スクロール等の大きな動きがない場合のみタップと判定
+        handleSlotTap(e);
+      });
+
+      // PCおよびフォールバッククリック
+      targetEl.addEventListener('click', handleSlotTap);
+    }
+
+    function tryPlaceCard(cardId, targetSlotId) {
+      if (!cardId || !targetSlotId) return;
+
+      if (cardId === targetSlotId) {
+        const placedCard = gameState.deck.find(c => c.id === cardId);
+        if (placedCard) {
+          gameState.placed[targetSlotId] = placedCard;
+          gameState.deck = gameState.deck.filter(c => c.id !== cardId);
+          gameState.selectedCardId = null;
+
+          showToast(`正解！ ${placedCard.displayName || placedCard.name}`, true);
+          renderBoard();
+          renderRack();
+          updateProgress();
+          updateSelectionBanner();
+
+          checkVictory();
+        }
+      } else {
+        showToast("違います！もう一度考えてみよう", false);
+        const slotEl = document.getElementById(`slot-${targetSlotId}`) || document.getElementById(`reagent-slot-${targetSlotId}`);
+        if (slotEl) {
+          slotEl.classList.add('ring-4', 'ring-rose-500', 'bg-rose-50');
+          setTimeout(() => {
+            slotEl.classList.remove('ring-4', 'ring-rose-500', 'bg-rose-50');
+          }, 600);
+        }
+      }
+    }
+
+    function checkVictory() {
+      const diagData = DIAGRAMS[currentDiagramKey];
+      const total = currentQuizType === "reagent"
+        ? diagData.slots.filter(s => s.reagentCondition).length
+        : diagData.slots.filter(s => !s.fixed).length;
+
+      if (Object.keys(gameState.placed).length === total) {
+        showToast("🎉 全問正解！素晴らしい！", true);
+      }
+    }
+
+    function renderRack() {
+      if (!elements.cardRack || !elements.deckRemainingText) return;
+      elements.cardRack.innerHTML = '';
+      elements.deckRemainingText.innerText = `残り: ${gameState.deck.length}個`;
+
+      // 選択中カードがある場合は盤面の枠をハイライト
+      highlightTargetSlots(!!gameState.selectedCardId);
+
+      if (gameState.deck.length === 0) {
+        elements.cardRack.innerHTML = `
+          <div class="w-full flex items-center justify-center text-xs text-emerald-600 font-bold py-2">
+            <i class="fa-solid fa-circle-check mr-1.5 text-base"></i> すべて正しく配置完了しました！
+          </div>
+        `;
+        return;
+      }
+
+      const isReagent = currentQuizType === "reagent";
+
+      gameState.deck.forEach(card => {
+        const cardEl = document.createElement('div');
+        const isSelected = gameState.selectedCardId === card.id;
+
+        cardEl.id = `card-${card.id}`;
+        cardEl.dataset.cardId = card.id;
+
+        if (!isTouchDevice) {
+          cardEl.draggable = true;
+        }
+
+        if (isReagent) {
+          cardEl.className = `shrink-0 w-36 h-[80px] rounded-xl border p-1.5 flex flex-col justify-center items-center text-center cursor-pointer transition-all select-none touch-manipulation ${
+            isSelected 
+              ? 'card-selected-active' 
+              : 'bg-white border-slate-300 hover:border-indigo-400 card-shadow active:scale-95'
+          }`;
+
+          cardEl.innerHTML = `
+            <div class="text-[10px] font-black text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-100 pointer-events-none mb-1">
+              ${card.reagentText}
+            </div>
+            ${card.actionText ? `<div class="text-[9px] font-bold text-slate-800 leading-tight pointer-events-none">${card.actionText}</div>` : ''}
+          `;
+        } else {
+          cardEl.className = `shrink-0 w-36 h-[88px] rounded-xl border p-1 flex flex-col justify-between items-center text-center cursor-pointer transition-all select-none touch-manipulation ${
+            isSelected 
+              ? 'card-selected-active' 
+              : 'bg-white border-slate-300 hover:border-blue-400 card-shadow active:scale-95'
+          }`;
+
+          cardEl.innerHTML = `
+            <div class="w-full flex-1 flex items-center justify-center overflow-hidden pointer-events-none">
+              ${card.svg}
+            </div>
+            <div class="text-[9.5px] font-bold text-slate-800 line-clamp-1 border-t border-slate-100 pt-0.5 w-full pointer-events-none">
+              ${card.name}
+            </div>
+          `;
+        }
+
+        // PC向け HTML5 ドラッグイベント
+        if (!isTouchDevice) {
+          cardEl.addEventListener('dragstart', (e) => {
+            e.dataTransfer.setData('text/plain', card.id);
+            cardEl.classList.add('opacity-50');
+          });
+
+          cardEl.addEventListener('dragend', () => {
+            cardEl.classList.remove('opacity-50');
+          });
+        }
+
+        // スマホ向け 指タッチドラッグ機能
+        attachTouchDrag(cardEl, card);
+
+        // タップ選択イベント
+        const triggerSelect = (e) => {
+          e.stopPropagation();
+          if (cardEl.dataset.justDragged === 'true') {
+            cardEl.dataset.justDragged = 'false';
+            return;
+          }
+          // トグル選択
+          gameState.selectedCardId = (gameState.selectedCardId === card.id) ? null : card.id;
+          renderRack();
+          updateSelectionBanner();
+
+          if (gameState.selectedCardId) {
+            showToast("図の当てはまる枠をタップしてください！", true);
+          }
+        };
+
+        cardEl.addEventListener('click', triggerSelect);
+
+        elements.cardRack.appendChild(cardEl);
+      });
+    }
+
+    function attachTouchDrag(cardEl, card) {
+      let ghostEl = null;
+      let startX = 0;
+      let startY = 0;
+      let isDragging = false;
+      let isHorizontalSwipe = null;
+
+      cardEl.addEventListener('touchstart', (e) => {
+        if (e.touches.length !== 1) return;
+        const touch = e.touches[0];
+        startX = touch.clientX;
+        startY = touch.clientY;
+        isDragging = false;
+        isHorizontalSwipe = null;
+      }, { passive: true });
+
+      cardEl.addEventListener('touchmove', (e) => {
+        if (e.touches.length !== 1) return;
+        const touch = e.touches[0];
+        const dx = touch.clientX - startX;
+        const dy = touch.clientY - startY;
+
+        // 最初の動きで「左右の横スワイプ」か「上方向（盤面）へのドラッグ」かを判別
+        if (isHorizontalSwipe === null && (Math.abs(dx) > 6 || Math.abs(dy) > 6)) {
+          if (Math.abs(dx) >= Math.abs(dy)) {
+            // 水平移動が優勢な場合はネイティブの横スワイプ・スクロールを優先
+            isHorizontalSwipe = true;
+          } else if (dy < -6) {
+            // 上方向への引き上げ時はドラッグ操作と判定
+            isHorizontalSwipe = false;
+          }
+        }
+
+        // 横スワイプ中はドラッグ処理を行わず、ブラウザの快適な横スクロールに任せる
+        if (isHorizontalSwipe === true) {
+          return;
+        }
+
+        // 上方向への引き上げドラッグ開始
+        if (!isDragging && isHorizontalSwipe === false) {
+          isDragging = true;
+          ghostEl = cardEl.cloneNode(true);
+          ghostEl.classList.add('touch-dragging-ghost');
+          ghostEl.style.width = `${cardEl.offsetWidth}px`;
+          ghostEl.style.height = `${cardEl.offsetHeight}px`;
+          document.body.appendChild(ghostEl);
+          cardEl.classList.add('opacity-40');
+        }
+
+        if (isDragging && ghostEl) {
+          e.preventDefault();
+          ghostEl.style.left = `${touch.clientX}px`;
+          ghostEl.style.top = `${touch.clientY}px`;
+        }
+      }, { passive: false });
+
+      cardEl.addEventListener('touchend', (e) => {
+        if (!isDragging) {
+          // 純粋なタップまたは横スワイプ時はclickイベントに委ねる
+          return;
+        }
+
+        const touch = e.changedTouches[0];
+        cardEl.classList.remove('opacity-40');
+        cardEl.dataset.justDragged = 'true';
+
+        if (ghostEl) {
+          ghostEl.remove();
+          ghostEl = null;
+        }
+
+        const droppedOn = document.elementFromPoint(touch.clientX, touch.clientY);
+        if (droppedOn) {
+          const dropTarget = droppedOn.closest('[data-slot-id]');
+          if (dropTarget) {
+            const targetSlotId = dropTarget.dataset.slotId;
+            tryPlaceCard(card.id, targetSlotId);
+          }
+        }
+
+        setTimeout(() => {
+          cardEl.dataset.justDragged = 'false';
+        }, 200);
+      });
+
+      cardEl.addEventListener('touchcancel', () => {
+        if (ghostEl) {
+          ghostEl.remove();
+          ghostEl = null;
+        }
+        cardEl.classList.remove('opacity-40');
+        isDragging = false;
+      });
+    }
+
+    function initGame() {
+      const diagData = DIAGRAMS[currentDiagramKey];
+      gameState.placed = {};
+      gameState.selectedCardId = null;
+
+      updateTypeButtons();
+      updateSelectionBanner();
+
+      if (elements.instructionText) {
+        elements.instructionText.innerText = currentQuizType === "reagent"
+          ? "試薬・反応カードを選んで、点線枠（ア〜キ、a, b 等）をタップまたはドラッグ"
+          : "構造式カードを選んで、点線の配置枠をタップまたはドラッグ";
+      }
+
+      if (currentQuizType === "reagent") {
+        gameState.deck = diagData.slots
+          .filter(s => s.reagentCondition)
+          .map(s => ({
+            id: s.id,
+            reagentText: s.reagentCondition.reagentText,
+            actionText: s.reagentCondition.actionText,
+            detail: s.reagentCondition.detail,
+            displayName: s.reagentCondition.actionText
+          }));
+      } else {
+        const playableSlots = diagData.slots.filter(s => !s.fixed);
+        gameState.deck = playableSlots.map(s => ({
+          id: s.id,
+          labelCode: s.labelCode || '',
+          svg: s.svg,
+          name: s.name,
+          displayName: s.name
+        }));
+      }
+
+      shuffleArray(gameState.deck);
+      renderBoard();
+      renderRack();
+      updateProgress();
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+      elements = {
+        diagramSelect: document.getElementById('diagramSelect'),
+        typeStructureBtn: document.getElementById('typeStructureBtn'),
+        typeReagentBtn: document.getElementById('typeReagentBtn'),
+        boardCanvas: document.getElementById('boardCanvas'),
+        arrowLayer: document.getElementById('arrowLayer'),
+        labelLayer: document.getElementById('labelLayer'),
+        nodeLayer: document.getElementById('nodeLayer'),
+        cardRack: document.getElementById('cardRack'),
+        scoreText: document.getElementById('scoreText'),
+        progressBar: document.getElementById('progressBar'),
+        deckRemainingText: document.getElementById('deckRemainingText'),
+        instructionText: document.getElementById('instructionText'),
+        toastMessage: document.getElementById('toastMessage'),
+        toastText: document.getElementById('toastText'),
+        resetBtn: document.getElementById('resetBtn'),
+        showAnswerBtn: document.getElementById('showAnswerBtn'),
+        helpBtn: document.getElementById('helpBtn')
+      };
+
+      if (elements.diagramSelect) {
+        elements.diagramSelect.addEventListener('change', (e) => {
+          currentDiagramKey = e.target.value;
+          initGame();
+        });
+      }
+
+      if (elements.typeStructureBtn) {
+        elements.typeStructureBtn.addEventListener('click', () => {
+          if (currentQuizType !== 'structure') {
+            currentQuizType = 'structure';
+            initGame();
+          }
+        });
+      }
+
+      if (elements.typeReagentBtn) {
+        elements.typeReagentBtn.addEventListener('click', () => {
+          if (currentQuizType !== 'reagent') {
+            currentQuizType = 'reagent';
+            initGame();
+          }
+        });
+      }
+
+      if (elements.resetBtn) {
+        elements.resetBtn.addEventListener('click', () => {
+          initGame();
+          showToast("リセットしました", true);
+        });
+      }
+
+      if (elements.showAnswerBtn) {
+        elements.showAnswerBtn.addEventListener('click', () => {
+          const diagData = DIAGRAMS[currentDiagramKey];
+          if (currentQuizType === "reagent") {
+            diagData.slots.filter(s => s.reagentCondition).forEach(s => {
+              gameState.placed[s.id] = s.reagentCondition;
+            });
+          } else {
+            diagData.slots.filter(s => !s.fixed).forEach(s => {
+              gameState.placed[s.id] = {
+                id: s.id,
+                labelCode: s.labelCode || '',
+                svg: s.svg,
+                name: s.name
+              };
+            });
+          }
+          gameState.deck = [];
+          gameState.selectedCardId = null;
+          renderBoard();
+          renderRack();
+          updateProgress();
+          showToast("解答を表示しました", true);
+        });
+      }
+
+      if (elements.helpBtn) {
+        elements.helpBtn.addEventListener('click', () => {
+          showToast("カードをタップして選び、配置枠をタップ！または指で直接ドラッグして運べます。", true);
+        });
+      }
+
+      // 選択解除ボタン
+      const cancelSelectBtn = document.getElementById('cancelSelectBtn');
+      if (cancelSelectBtn) {
+        cancelSelectBtn.addEventListener('click', () => {
+          gameState.selectedCardId = null;
+          renderRack();
+          updateSelectionBanner();
+        });
+      }
+
+      // ズームボタンのイベント設定
+      const zoomInBtn = document.getElementById('zoomInBtn');
+      const zoomOutBtn = document.getElementById('zoomOutBtn');
+      const zoomResetBtn = document.getElementById('zoomResetBtn');
+      const zoomFitBtn = document.getElementById('zoomFitBtn');
+
+      if (zoomInBtn) zoomInBtn.addEventListener('click', () => setZoom(currentZoom + 0.15));
+      if (zoomOutBtn) zoomOutBtn.addEventListener('click', () => setZoom(currentZoom - 0.15));
+      if (zoomResetBtn) zoomResetBtn.addEventListener('click', () => setZoom(1.0));
+      if (zoomFitBtn) zoomFitBtn.addEventListener('click', fitToScreen);
+
+      // 2本指でのピンチズーム（拡大・縮小）操作を登録
+      setupPinchZoom();
+
+      initGame();
+
+      // モバイルで画面幅が狭い場合は、初期状態で画面幅に合わせて全体表示
+      if (window.innerWidth < 768) {
+        setTimeout(fitToScreen, 200);
+      }
+    });
+
+    // スマホの2本指ピンチ操作およびトラックパッド・Ctrl+ホイール対応
+    function setupPinchZoom() {
+      const mainEl = document.querySelector('main');
+      if (!mainEl) return;
+
+      let initialDistance = null;
+      let initialZoom = currentZoom;
+
+      mainEl.addEventListener('touchstart', (e) => {
+        if (e.touches.length === 2) {
+          // 2本指が触れた時の距離を記録
+          const touch1 = e.touches[0];
+          const touch2 = e.touches[1];
+          initialDistance = Math.hypot(
+            touch2.clientX - touch1.clientX,
+            touch2.clientY - touch1.clientY
+          );
+          initialZoom = currentZoom;
+        }
+      }, { passive: true });
+
+      mainEl.addEventListener('touchmove', (e) => {
+        if (e.touches.length === 2 && initialDistance) {
+          // ブラウザ既定の全体拡大を防止し、アプリ盤面をスムーズに拡大縮小
+          e.preventDefault();
+          const touch1 = e.touches[0];
+          const touch2 = e.touches[1];
+          const currentDistance = Math.hypot(
+            touch2.clientX - touch1.clientX,
+            touch2.clientY - touch1.clientY
+          );
+
+          if (initialDistance > 0) {
+            const factor = currentDistance / initialDistance;
+            setZoom(initialZoom * factor);
+          }
+        }
+      }, { passive: false });
+
+      const endPinch = (e) => {
+        if (e.touches.length < 2) {
+          initialDistance = null;
+        }
+      };
+
+      mainEl.addEventListener('touchend', endPinch, { passive: true });
+      mainEl.addEventListener('touchcancel', endPinch, { passive: true });
+
+      // PCのトラックパッドのピンチや Ctrl + マウスホイール操作にも対応
+      mainEl.addEventListener('wheel', (e) => {
+        if (e.ctrlKey) {
+          e.preventDefault();
+          const delta = -e.deltaY * 0.005;
+          setZoom(currentZoom + delta);
+        }
+      }, { passive: false });
+    }
+  </script>
+</body>
+</html>
